@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import QRScanner from "@/components/QRScanner";
 import UploadArea from "@/components/UploadArea";
 import ResultCard from "@/components/ResultCard";
+import { analyzeMedicineImage } from "@/services/medicineAnalysis";
 
 export type ScanResult = {
   status: "genuine" | "fake" | "suspicious";
@@ -24,54 +25,43 @@ const Scan = () => {
   const [result, setResult] = useState<ScanResult | null>(null);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
 
-  const simulateAIAnalysis = async (source: string) => {
+  const analyzeWithModel = async (imageData: string) => {
     setIsAnalyzing(true);
     setResult(null);
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    try {
+      // Call your trained model
+      const analysisResult = await analyzeMedicineImage(imageData);
+      
+      setResult(analysisResult);
+      
+      // Save to history
+      const history = JSON.parse(localStorage.getItem("scanHistory") || "[]");
+      history.unshift({
+        ...analysisResult,
+        timestamp: new Date().toISOString(),
+        id: Date.now().toString()
+      });
+      localStorage.setItem("scanHistory", JSON.stringify(history.slice(0, 20)));
 
-    // Random result for demo
-    const outcomes: ScanResult["status"][] = ["genuine", "fake", "suspicious"];
-    const randomStatus = outcomes[Math.floor(Math.random() * outcomes.length)];
-
-    const mockResult: ScanResult = {
-      status: randomStatus,
-      confidence: Math.floor(Math.random() * 20) + 80,
-      medicineName: "Paracetamol 500mg",
-      batchNumber: "BATCH" + Math.floor(Math.random() * 100000),
-      expiryDate: "12/2026",
-      manufacturer: "Generic Pharma Ltd.",
-      details: randomStatus === "genuine" 
-        ? "All packaging details match our database. Batch number verified. Security features present."
-        : randomStatus === "fake"
-        ? "Packaging inconsistencies detected. Batch number not found in manufacturer database. Missing security hologram."
-        : "Some packaging details match, but batch number verification failed. Recommend further verification."
-    };
-
-    setResult(mockResult);
-    setIsAnalyzing(false);
-
-    // Save to history
-    const history = JSON.parse(localStorage.getItem("scanHistory") || "[]");
-    history.unshift({
-      ...mockResult,
-      timestamp: new Date().toISOString(),
-      id: Date.now().toString()
-    });
-    localStorage.setItem("scanHistory", JSON.stringify(history.slice(0, 20)));
-
-    toast.success("Analysis complete!");
+      toast.success("Analysis complete!");
+    } catch (error) {
+      console.error("Analysis failed:", error);
+      toast.error("Failed to analyze image. Please check your model configuration.");
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const handleImageUpload = (imageUrl: string) => {
     setUploadedImage(imageUrl);
-    simulateAIAnalysis("upload");
+    analyzeWithModel(imageUrl);
   };
 
   const handleQRScan = (data: string) => {
     toast.success("QR Code scanned: " + data);
-    simulateAIAnalysis("qr");
+    // QR codes can be analyzed if they contain image URLs or data
+    // For now, we'll just show the scanned data
   };
 
   return (
