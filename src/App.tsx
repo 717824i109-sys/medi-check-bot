@@ -15,36 +15,29 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+const MainLayout = ({ children }: { children: React.ReactNode }) => (
+  <div className="flex flex-col min-h-screen">
+    <Navbar />
+    <main className="flex-1">{children}</main>
+    <Footer />
+  </div>
+);
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <div className="flex flex-col min-h-screen">
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route
-              path="*"
-              element={
-                <>
-                  <Navbar />
-                  <main className="flex-1">
-                    <Routes>
-                      <Route path="/" element={<Home />} />
-                      <Route path="/scan" element={<Scan />} />
-                      <Route path="/dashboard" element={<Dashboard />} />
-                      <Route path="/about" element={<About />} />
-                      <Route path="/contact" element={<Contact />} />
-                      <Route path="*" element={<NotFound />} />
-                    </Routes>
-                  </main>
-                  <Footer />
-                </>
-              }
-            />
-          </Routes>
-        </div>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/" element={<MainLayout><Home /></MainLayout>} />
+          <Route path="/scan" element={<MainLayout><Scan /></MainLayout>} />
+          <Route path="/dashboard" element={<MainLayout><Dashboard /></MainLayout>} />
+          <Route path="/about" element={<MainLayout><About /></MainLayout>} />
+          <Route path="/contact" element={<MainLayout><Contact /></MainLayout>} />
+          <Route path="*" element={<MainLayout><NotFound /></MainLayout>} />
+        </Routes>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
