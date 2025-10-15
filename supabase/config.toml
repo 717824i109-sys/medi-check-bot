@@ -1,1 +1,4 @@
 project_id = "orrdygxpeoenqaxevcjf"
+
+[functions.analyze-medicine]
+verify_jwt = false
