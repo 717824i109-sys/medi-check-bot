@@ -1,14 +1,54 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, XCircle, AlertTriangle, Download, Share2 } from "lucide-react";
+import { CheckCircle2, XCircle, AlertTriangle, Download, Share2, Volume2 } from "lucide-react";
 import { ScanResult } from "@/pages/Scan";
 import { toast } from "sonner";
+import { useEffect, useState } from "react";
 
 interface ResultCardProps {
   result: ScanResult;
 }
 
 const ResultCard = ({ result }: ResultCardProps) => {
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  const speakResult = () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      
+      let message = "";
+      if (result.status === "genuine") {
+        message = `This medicine is genuine. ${result.medicineName}. ${result.purpose || ""}`;
+      } else if (result.status === "fake") {
+        message = `Warning! This is a fake medicine. ${result.medicineName}. Possible side effects include: ${result.sideEffects || "unknown harmful effects"}. Do not consume.`;
+      } else {
+        message = `This medicine is suspicious. ${result.medicineName}. Please verify with a pharmacist.`;
+      }
+      
+      const utterance = new SpeechSynthesisUtterance(message);
+      utterance.rate = 0.9;
+      utterance.pitch = 1;
+      utterance.volume = 1;
+      
+      utterance.onstart = () => setIsSpeaking(true);
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => setIsSpeaking(false);
+      
+      window.speechSynthesis.speak(utterance);
+      toast.success("Playing voice feedback");
+    } else {
+      toast.error("Text-to-speech not supported in your browser");
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
   const getStatusConfig = () => {
     switch (result.status) {
       case "genuine":
@@ -97,17 +137,57 @@ const ResultCard = ({ result }: ResultCardProps) => {
           </div>
         </div>
 
+        {result.purpose && result.status === "genuine" && (
+          <div className="p-4 bg-success/10 rounded-lg border border-success/20">
+            <h4 className="font-semibold text-success mb-2">💊 Medicine Purpose</h4>
+            <p className="text-sm mb-3">{result.purpose}</p>
+            {result.description && (
+              <>
+                <h5 className="font-semibold text-success text-sm mb-1">Usage Instructions</h5>
+                <p className="text-sm text-muted-foreground">{result.description}</p>
+              </>
+            )}
+          </div>
+        )}
+
+        {(result.sideEffects || result.reason) && (result.status === "fake" || result.status === "suspicious") && (
+          <div className="p-4 bg-destructive/10 rounded-lg border border-destructive/20">
+            <h4 className="font-semibold text-destructive mb-2">⚠️ Warning Information</h4>
+            {result.sideEffects && (
+              <>
+                <h5 className="font-semibold text-destructive text-sm mb-1">Possible Side Effects</h5>
+                <p className="text-sm mb-3 text-destructive/90">{result.sideEffects}</p>
+              </>
+            )}
+            {result.reason && (
+              <>
+                <h5 className="font-semibold text-destructive text-sm mb-1">Detection Reason</h5>
+                <p className="text-sm text-destructive/90">{result.reason}</p>
+              </>
+            )}
+          </div>
+        )}
+
         <div className="pt-4 border-t">
           <div className="text-sm text-muted-foreground mb-2">Analysis Details</div>
           <p className="text-sm leading-relaxed">{result.details}</p>
         </div>
 
-        <div className="flex gap-3 pt-4">
-          <Button onClick={handleDownloadReport} variant="outline" className="flex-1">
-            <Download className="mr-2 h-4 w-4" />
-            Download Report
+        <div className="grid grid-cols-3 gap-3 pt-4">
+          <Button 
+            onClick={speakResult} 
+            variant={result.status === "genuine" ? "default" : "destructive"}
+            className="col-span-3"
+            disabled={isSpeaking}
+          >
+            <Volume2 className="mr-2 h-4 w-4" />
+            {isSpeaking ? "Speaking..." : "Voice Feedback"}
           </Button>
-          <Button onClick={handleShare} variant="outline" className="flex-1">
+          <Button onClick={handleDownloadReport} variant="outline" className="col-span-3 sm:col-span-1">
+            <Download className="mr-2 h-4 w-4" />
+            Download
+          </Button>
+          <Button onClick={handleShare} variant="outline" className="col-span-3 sm:col-span-2">
             <Share2 className="mr-2 h-4 w-4" />
             Share Result
           </Button>

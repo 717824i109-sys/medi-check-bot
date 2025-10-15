@@ -14,7 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      fake_medicine_effects: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string
+          reason: string
+          side_effects: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name: string
+          reason: string
+          side_effects: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string
+          reason?: string
+          side_effects?: string
+        }
+        Relationships: []
+      }
+      medicine_info: {
+        Row: {
+          created_at: string | null
+          description: string
+          id: string
+          name: string
+          purpose: string
+        }
+        Insert: {
+          created_at?: string | null
+          description: string
+          id?: string
+          name: string
+          purpose: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string
+          id?: string
+          name?: string
+          purpose?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

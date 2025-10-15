@@ -8,6 +8,7 @@ import QRScanner from "@/components/QRScanner";
 import UploadArea from "@/components/UploadArea";
 import ResultCard from "@/components/ResultCard";
 import { analyzeMedicineImage } from "@/services/medicineAnalysis";
+import { supabase } from "@/integrations/supabase/client";
 
 export type ScanResult = {
   status: "genuine" | "fake" | "suspicious";
@@ -17,6 +18,10 @@ export type ScanResult = {
   expiryDate: string;
   manufacturer: string;
   details: string;
+  purpose?: string;
+  description?: string;
+  sideEffects?: string;
+  reason?: string;
 };
 
 const Scan = () => {
@@ -33,12 +38,45 @@ const Scan = () => {
       // Call your trained model
       const analysisResult = await analyzeMedicineImage(imageData);
       
-      setResult(analysisResult);
+      // Fetch additional info from database based on status
+      let enrichedResult = { ...analysisResult };
+      
+      if (analysisResult.status === "genuine") {
+        const { data, error } = await supabase
+          .from("medicine_info")
+          .select("purpose, description")
+          .ilike("name", `%${analysisResult.medicineName}%`)
+          .maybeSingle();
+        
+        if (data && !error) {
+          enrichedResult = {
+            ...enrichedResult,
+            purpose: data.purpose,
+            description: data.description
+          };
+        }
+      } else if (analysisResult.status === "fake" || analysisResult.status === "suspicious") {
+        const { data, error } = await supabase
+          .from("fake_medicine_effects")
+          .select("side_effects, reason")
+          .ilike("name", `%${analysisResult.medicineName}%`)
+          .maybeSingle();
+        
+        if (data && !error) {
+          enrichedResult = {
+            ...enrichedResult,
+            sideEffects: data.side_effects,
+            reason: data.reason
+          };
+        }
+      }
+      
+      setResult(enrichedResult);
       
       // Save to history
       const history = JSON.parse(localStorage.getItem("scanHistory") || "[]");
       history.unshift({
-        ...analysisResult,
+        ...enrichedResult,
         timestamp: new Date().toISOString(),
         id: Date.now().toString()
       });
