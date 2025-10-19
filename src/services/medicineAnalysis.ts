@@ -60,8 +60,10 @@ export async function analyzeMedicineImage(imageData: string): Promise<ScanResul
       throw new Error("No response from analysis service");
     }
 
+    // Check for backend error messages with hints
     if (data.error) {
-      throw new Error(data.error);
+      const errorMsg = data.hint || data.error;
+      throw new Error(errorMsg);
     }
 
     console.log("Analysis complete:", data);
@@ -72,6 +74,10 @@ export async function analyzeMedicineImage(imageData: string): Promise<ScanResul
     
     // Provide user-friendly error messages
     if (error instanceof Error) {
+      // Pass through custom error messages from backend
+      if (error.message.includes("QR code") || error.message.includes("upload")) {
+        throw error;
+      }
       if (error.message.includes("Rate limit")) {
         throw new Error("Too many requests. Please wait a moment and try again.");
       }
@@ -81,6 +87,8 @@ export async function analyzeMedicineImage(imageData: string): Promise<ScanResul
       if (error.message.includes("Failed to connect")) {
         throw new Error("Unable to reach analysis service. Please check your connection.");
       }
+      // Pass through other specific errors
+      throw error;
     }
     
     throw new Error("Failed to analyze image. Please try again.");

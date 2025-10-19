@@ -85,7 +85,11 @@ const Scan = () => {
       toast.success("Analysis complete!");
     } catch (error) {
       console.error("Analysis failed:", error);
-      toast.error("Failed to analyze image. Please check your model configuration.");
+      const errorMessage = error instanceof Error ? error.message : "Unable to analyze image";
+      toast.error(errorMessage, {
+        duration: 5000,
+        description: "Try uploading a clear photo of the medicine package"
+      });
     } finally {
       setIsAnalyzing(false);
     }
@@ -139,8 +143,11 @@ const Scan = () => {
       setUploadedImage(data);
       analyzeWithModel(data);
     } else {
-      // Plain text - show error
-      toast.error("QR code format not recognized. Please scan a medicine package or QR with image URL.");
+      // Plain text - show helpful error
+      toast.error("This QR code doesn't contain a medicine image", {
+        duration: 4000,
+        description: "Please upload a photo of the medicine package instead"
+      });
     }
   };
 

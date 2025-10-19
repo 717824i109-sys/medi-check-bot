@@ -32,17 +32,36 @@ serve(async (req) => {
     if (image.startsWith("http://") || image.startsWith("https://")) {
       console.log("Fetching image from URL:", image);
       try {
-        const imageResponse = await fetch(image);
+        const imageResponse = await fetch(image, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          }
+        });
+        
         if (!imageResponse.ok) {
-          throw new Error("Failed to fetch image from URL");
+          console.error("Failed to fetch image, status:", imageResponse.status);
+          return new Response(
+            JSON.stringify({ 
+              error: "Unable to access the QR code image. Please try uploading the medicine package photo directly.",
+              hint: "This QR link may not be a direct image. Try taking a photo of the medicine package instead."
+            }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
         }
+        
         const imageBuffer = await imageResponse.arrayBuffer();
         const base64 = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
         imageData = `data:image/jpeg;base64,${base64}`;
-        console.log("Image converted to base64");
+        console.log("Image converted to base64 successfully");
       } catch (e) {
         console.error("Error fetching image:", e);
-        throw new Error("Failed to fetch image from URL");
+        return new Response(
+          JSON.stringify({ 
+            error: "Could not load the image from this QR code.",
+            hint: "Please upload a photo of the medicine package directly instead of scanning a URL-based QR code."
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
     }
 
