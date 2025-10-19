@@ -101,12 +101,14 @@ const Scan = () => {
   };
 
   const handleQRScan = (data: string) => {
-    toast.success("QR Code scanned successfully!");
+    console.log("QR scanned:", data);
     
     try {
       // Try to parse QR data as JSON (medicine info)
       const qrData = JSON.parse(data);
       if (qrData.medicine_name || qrData.name) {
+        toast.success("Medicine QR code detected!");
+        
         // QR contains medicine data directly
         const result: ScanResult = {
           status: "genuine",
@@ -134,21 +136,19 @@ const Scan = () => {
       // Not JSON, continue with other checks
     }
     
-    // Check if the QR code contains a URL (image link)
-    if (data.startsWith("http://") || data.startsWith("https://")) {
+    // Check if it's a base64 image
+    if (data.startsWith("data:image")) {
+      toast.success("QR image detected!");
       setUploadedImage(data);
       analyzeWithModel(data);
-    } else if (data.startsWith("data:image")) {
-      // Base64 image data
-      setUploadedImage(data);
-      analyzeWithModel(data);
-    } else {
-      // Plain text - show helpful error
-      toast.error("This QR code doesn't contain a medicine image", {
-        duration: 4000,
-        description: "Please upload a photo of the medicine package instead"
-      });
+      return;
     }
+    
+    // For URL-based QR codes, show helpful message
+    toast.error("QR Scanner Not Supported for This Code", {
+      duration: 6000,
+      description: "Please use the Upload Image tab to take a photo of the medicine package instead"
+    });
   };
 
   return (
@@ -189,6 +189,11 @@ const Scan = () => {
             </TabsContent>
 
             <TabsContent value="qr" className="mt-6">
+              <div className="text-center mb-4 p-4 bg-muted/50 rounded-lg">
+                <p className="text-sm text-muted-foreground">
+                  <strong>Note:</strong> QR scanner works best with medicine-specific QR codes. For general verification, use the Upload Image tab to photograph the medicine package.
+                </p>
+              </div>
               <QRScanner onScan={handleQRScan} />
             </TabsContent>
           </Tabs>
