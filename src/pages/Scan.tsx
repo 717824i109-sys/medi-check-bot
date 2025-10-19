@@ -99,14 +99,48 @@ const Scan = () => {
   const handleQRScan = (data: string) => {
     toast.success("QR Code scanned successfully!");
     
+    try {
+      // Try to parse QR data as JSON (medicine info)
+      const qrData = JSON.parse(data);
+      if (qrData.medicine_name || qrData.name) {
+        // QR contains medicine data directly
+        const result: ScanResult = {
+          status: "genuine",
+          confidence: qrData.confidence || 95,
+          medicineName: qrData.medicine_name || qrData.name || "Unknown",
+          batchNumber: qrData.batch_number || qrData.batch || "N/A",
+          expiryDate: qrData.expiry_date || qrData.expiry || "N/A",
+          manufacturer: qrData.manufacturer || "N/A",
+          details: "Medicine verified via QR code",
+          purpose: qrData.purpose,
+        };
+        setResult(result);
+        
+        // Save to history
+        const history = JSON.parse(localStorage.getItem("scanHistory") || "[]");
+        history.unshift({
+          ...result,
+          timestamp: new Date().toISOString(),
+          id: Date.now().toString()
+        });
+        localStorage.setItem("scanHistory", JSON.stringify(history.slice(0, 20)));
+        return;
+      }
+    } catch (e) {
+      // Not JSON, continue with other checks
+    }
+    
     // Check if the QR code contains a URL (image link)
     if (data.startsWith("http://") || data.startsWith("https://")) {
       setUploadedImage(data);
       analyzeWithModel(data);
-    } else {
-      // If it's not a URL, treat it as base64 or raw data
+    } else if (data.startsWith("data:image")) {
+      // Base64 image data
       setUploadedImage(data);
       analyzeWithModel(data);
+    } else {
+      // Plain text - show error
+      toast.error("QR code format not recognized. Please scan a medicine package or QR with image URL.");
     }
   };
 

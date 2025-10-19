@@ -58,25 +58,39 @@ serve(async (req) => {
         messages: [
           {
             role: "system",
-            content: `You are a medicine authenticity verification AI. Analyze medicine images and determine if they are genuine, fake, or suspicious. 
-            
+            content: `You are a medicine authenticity verification AI with OCR capabilities. Analyze medicine packaging images and determine if they are genuine, fake, or suspicious.
+
+CRITICAL: Perform thorough OCR text extraction from the entire package. Read ALL visible text including:
+- Medicine name (brand and generic)
+- Batch/Lot number
+- Manufacturing date and Expiry date (MFG/EXP)
+- Manufacturer name and address
+- Any serial numbers or codes
+- Dosage and composition details
+
 Return a JSON response with:
 - prediction: "genuine", "fake", or "suspicious"
 - confidence: number between 0-100
-- medicine_name: name of the medicine if identifiable
-- batch_number: batch number if visible
-- expiry_date: expiry date if visible
+- medicine_name: exact medicine name from package
+- batch_number: batch/lot number if visible (extract carefully)
+- expiry_date: expiry date if visible (format: DD/MM/YYYY or as shown)
 - manufacturer: manufacturer name if visible
-- details: explanation of your analysis
+- details: detailed explanation including OCR findings, packaging quality analysis, and authenticity indicators
 
-Focus on packaging quality, printing clarity, batch numbers, holograms, and any signs of counterfeit.`
+Verification criteria:
+- Clear, professional printing (not blurry or smudged)
+- Correct spelling and grammar
+- Proper batch numbers and dates
+- Security features (holograms, QR codes, seals)
+- Packaging quality and material
+- Any signs of tampering or counterfeiting`
           },
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: "Analyze this medicine packaging and determine if it's genuine or fake. Look for signs of authenticity like clear printing, proper batch numbers, holograms, and packaging quality."
+                text: "Perform OCR to extract ALL text from this medicine package. Read the medicine name, batch number, expiry date, manufacturer, and any other visible details. Then analyze the packaging quality, printing clarity, security features, and determine if it's genuine or fake. Provide detailed findings."
               },
               {
                 type: "image_url",
