@@ -97,9 +97,17 @@ const Scan = () => {
   };
 
   const handleQRScan = (data: string) => {
-    toast.success("QR Code scanned: " + data);
-    // QR codes can be analyzed if they contain image URLs or data
-    // For now, we'll just show the scanned data
+    toast.success("QR Code scanned successfully!");
+    
+    // Check if the QR code contains a URL (image link)
+    if (data.startsWith("http://") || data.startsWith("https://")) {
+      setUploadedImage(data);
+      analyzeWithModel(data);
+    } else {
+      // If it's not a URL, treat it as base64 or raw data
+      setUploadedImage(data);
+      analyzeWithModel(data);
+    }
   };
 
   return (
