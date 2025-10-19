@@ -27,6 +27,25 @@ serve(async (req) => {
 
     console.log("Analyzing medicine image with AI...");
 
+    // Convert URL to base64 if needed
+    let imageData = image;
+    if (image.startsWith("http://") || image.startsWith("https://")) {
+      console.log("Fetching image from URL:", image);
+      try {
+        const imageResponse = await fetch(image);
+        if (!imageResponse.ok) {
+          throw new Error("Failed to fetch image from URL");
+        }
+        const imageBuffer = await imageResponse.arrayBuffer();
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
+        imageData = `data:image/jpeg;base64,${base64}`;
+        console.log("Image converted to base64");
+      } catch (e) {
+        console.error("Error fetching image:", e);
+        throw new Error("Failed to fetch image from URL");
+      }
+    }
+
     // Call Lovable AI Gateway with image analysis
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -62,7 +81,7 @@ Focus on packaging quality, printing clarity, batch numbers, holograms, and any 
               {
                 type: "image_url",
                 image_url: {
-                  url: image
+                  url: imageData
                 }
               }
             ]
