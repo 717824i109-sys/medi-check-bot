@@ -5,6 +5,42 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// OpenFDA API integration for verified medicine information
+async function fetchMedicineInfo(medicineName: string) {
+  try {
+    const searchTerm = encodeURIComponent(medicineName.toLowerCase());
+    const response = await fetch(
+      `https://api.fda.gov/drug/label.json?search=openfda.brand_name:"${searchTerm}"&limit=1`
+    );
+    
+    if (!response.ok) {
+      console.log('OpenFDA API returned non-OK status:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    
+    if (data.results && data.results.length > 0) {
+      const result = data.results[0];
+      return {
+        genericName: result.openfda?.generic_name?.[0] || 'N/A',
+        brandName: result.openfda?.brand_name?.[0] || medicineName,
+        manufacturer: result.openfda?.manufacturer_name?.[0] || 'N/A',
+        purpose: result.purpose?.[0] || result.indications_and_usage?.[0] || 'N/A',
+        dosageForm: result.openfda?.dosage_form?.[0] || 'N/A',
+        composition: result.active_ingredient?.[0] || 'N/A',
+        sideEffects: result.adverse_reactions?.[0] || 'See package insert for complete information',
+        contraindications: result.contraindications?.[0] || 'Consult healthcare provider',
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('OpenFDA API error:', error);
+    return null;
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -155,18 +191,32 @@ Verification criteria:
       throw new Error("Invalid AI response format");
     }
 
-    // Map AI response to expected format
+    // Fetch additional verified medicine info from OpenFDA
+    const medicineName = parsedResponse.medicine_name || "Unknown Medicine";
+    const medicineInfo = await fetchMedicineInfo(medicineName);
+
+    // Map AI response to expected format with FDA data
     const result = {
       prediction: parsedResponse.prediction || "suspicious",
       confidence: parsedResponse.confidence || 50,
-      medicine_name: parsedResponse.medicine_name || "Unknown Medicine",
+      medicine_name: medicineName,
       batch_number: parsedResponse.batch_number || "N/A",
       expiry_date: parsedResponse.expiry_date || "N/A",
-      manufacturer: parsedResponse.manufacturer || "Unknown",
+      manufacturer: parsedResponse.manufacturer || medicineInfo?.manufacturer || "Unknown",
       details: parsedResponse.details || "Analysis completed",
+      // Additional FDA-verified information
+      fdaInfo: medicineInfo ? {
+        genericName: medicineInfo.genericName,
+        brandName: medicineInfo.brandName,
+        purpose: medicineInfo.purpose,
+        dosageForm: medicineInfo.dosageForm,
+        composition: medicineInfo.composition,
+        sideEffects: medicineInfo.sideEffects,
+        contraindications: medicineInfo.contraindications,
+      } : undefined
     };
 
-    console.log("Returning analysis result:", result);
+    console.log("Returning analysis result with FDA data:", result);
 
     return new Response(
       JSON.stringify(result),

@@ -1,9 +1,11 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, XCircle, AlertTriangle, Download, Share2, Volume2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { CheckCircle2, XCircle, AlertTriangle, Download, Share2, Volume2, Shield, ShieldAlert } from "lucide-react";
 import { ScanResult } from "@/pages/Scan";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
+import { Separator } from "@/components/ui/separator";
 
 interface ResultCardProps {
   result: ScanResult;
@@ -137,7 +139,80 @@ const ResultCard = ({ result }: ResultCardProps) => {
           </div>
         </div>
 
-        {result.purpose && result.status === "genuine" && (
+        {/* Blockchain Verification Badge */}
+        {result.blockchain && (
+          <div className={`p-4 rounded-lg border ${
+            result.blockchain.isVerified 
+              ? 'bg-primary/10 border-primary/20' 
+              : 'bg-muted border-muted-foreground/20'
+          }`}>
+            <div className="flex items-center gap-2 mb-2">
+              {result.blockchain.isVerified ? (
+                <Shield className="h-5 w-5 text-primary" />
+              ) : (
+                <ShieldAlert className="h-5 w-5 text-muted-foreground" />
+              )}
+              <h4 className="font-semibold">Blockchain Verification</h4>
+              <Badge variant={result.blockchain.isVerified ? "default" : "outline"}>
+                {result.blockchain.isVerified ? "✓ Verified on Chain" : "Not Found"}
+              </Badge>
+            </div>
+            {result.blockchain.isVerified && result.blockchain.timestamp && (
+              <p className="text-sm text-muted-foreground">
+                Registered: {new Date(result.blockchain.timestamp).toLocaleDateString()}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* FDA Verified Information */}
+        {result.fdaInfo && result.status === "genuine" && (
+          <div className="p-4 bg-success/10 rounded-lg border border-success/20">
+            <h4 className="font-semibold text-success mb-3">✓ FDA Verified Information</h4>
+            
+            <div className="space-y-3">
+              <div>
+                <h5 className="font-semibold text-sm mb-1">Purpose & Usage</h5>
+                <p className="text-sm text-muted-foreground">{result.fdaInfo.purpose}</p>
+              </div>
+              
+              <Separator />
+              
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <span className="font-semibold">Generic Name:</span>
+                  <p className="text-muted-foreground">{result.fdaInfo.genericName}</p>
+                </div>
+                <div>
+                  <span className="font-semibold">Dosage Form:</span>
+                  <p className="text-muted-foreground">{result.fdaInfo.dosageForm}</p>
+                </div>
+              </div>
+              
+              <div>
+                <h5 className="font-semibold text-sm mb-1">Active Ingredients</h5>
+                <p className="text-sm text-muted-foreground">{result.fdaInfo.composition}</p>
+              </div>
+              
+              {result.fdaInfo.sideEffects && result.fdaInfo.sideEffects !== "See package insert for complete information" && (
+                <div>
+                  <h5 className="font-semibold text-sm mb-1">Possible Side Effects</h5>
+                  <p className="text-sm text-muted-foreground line-clamp-3">{result.fdaInfo.sideEffects}</p>
+                </div>
+              )}
+              
+              {result.fdaInfo.contraindications && result.fdaInfo.contraindications !== "Consult healthcare provider" && (
+                <div>
+                  <h5 className="font-semibold text-sm mb-1">Contraindications</h5>
+                  <p className="text-sm text-muted-foreground line-clamp-3">{result.fdaInfo.contraindications}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Legacy purpose field (fallback if FDA info not available) */}
+        {result.purpose && !result.fdaInfo && result.status === "genuine" && (
           <div className="p-4 bg-success/10 rounded-lg border border-success/20">
             <h4 className="font-semibold text-success mb-2">💊 Medicine Purpose</h4>
             <p className="text-sm mb-3">{result.purpose}</p>

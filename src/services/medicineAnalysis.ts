@@ -24,6 +24,8 @@ function parseModelResponse(modelOutput: any): ScanResult {
     expiryDate: modelOutput.expiry_date || "N/A",
     manufacturer: modelOutput.manufacturer || "Unknown",
     details: modelOutput.details || generateDetailsMessage(status, confidence),
+    // Include FDA information if provided by backend
+    fdaInfo: modelOutput.fdaInfo || undefined,
   };
 }
 

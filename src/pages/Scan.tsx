@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -7,8 +7,12 @@ import { toast } from "sonner";
 import QRScanner from "@/components/QRScanner";
 import UploadArea from "@/components/UploadArea";
 import ResultCard from "@/components/ResultCard";
+import VoiceControl from "@/components/VoiceControl";
+import SupplyChainMap from "@/components/SupplyChainMap";
 import { analyzeMedicineImage } from "@/services/medicineAnalysis";
 import { supabase } from "@/integrations/supabase/client";
+import { verifyBatchOnBlockchain } from "@/services/blockchainVerification";
+import { voiceAssistant } from "@/services/voiceAssistant";
 
 export type ScanResult = {
   status: "genuine" | "fake" | "suspicious";
@@ -22,6 +26,22 @@ export type ScanResult = {
   description?: string;
   sideEffects?: string;
   reason?: string;
+  // FDA verified information
+  fdaInfo?: {
+    genericName: string;
+    brandName: string;
+    purpose: string;
+    dosageForm: string;
+    composition: string;
+    sideEffects: string;
+    contraindications: string;
+  };
+  // Blockchain verification
+  blockchain?: {
+    isVerified: boolean;
+    timestamp?: number;
+    manufacturer?: string;
+  };
 };
 
 const Scan = () => {
@@ -29,17 +49,24 @@ const Scan = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [showSupplyChain, setShowSupplyChain] = useState(false);
 
   const analyzeWithModel = async (imageData: string) => {
     setIsAnalyzing(true);
     setResult(null);
 
     try {
-      // Call your trained model
+      // Call AI model for analysis (now includes OpenFDA integration)
       const analysisResult = await analyzeMedicineImage(imageData);
       
+      // Perform blockchain verification
+      const blockchainVerification = await verifyBatchOnBlockchain(analysisResult.batchNumber);
+      
       // Fetch additional info from database based on status
-      let enrichedResult = { ...analysisResult };
+      let enrichedResult = { 
+        ...analysisResult,
+        blockchain: blockchainVerification
+      };
       
       if (analysisResult.status === "genuine") {
         const { data, error } = await supabase
@@ -72,6 +99,14 @@ const Scan = () => {
       }
       
       setResult(enrichedResult);
+      setShowSupplyChain(enrichedResult.status === "genuine");
+      
+      // Read result aloud with voice assistant
+      const resultMessage = `Medicine analysis complete. This is ${enrichedResult.medicineName}. 
+        Status: ${enrichedResult.status}. Confidence: ${enrichedResult.confidence} percent. 
+        ${enrichedResult.fdaInfo ? `Purpose: ${enrichedResult.fdaInfo.purpose.substring(0, 100)}` : ''}`;
+      
+      voiceAssistant.speak(resultMessage);
       
       // Save to history
       const history = JSON.parse(localStorage.getItem("scanHistory") || "[]");
@@ -151,8 +186,26 @@ const Scan = () => {
     });
   };
 
+  const handleVoiceCommand = (command: string) => {
+    if (command.includes('scan') || command.includes('analyze')) {
+      toast.info('Voice command activated', {
+        description: 'Please upload or scan a medicine image'
+      });
+      setActiveTab('upload');
+    }
+  };
+
+  // Cleanup voice on unmount
+  useEffect(() => {
+    return () => {
+      voiceAssistant.stopSpeaking();
+      voiceAssistant.stopListening();
+    };
+  }, []);
+
   return (
     <div className="min-h-screen py-12 px-4">
+      <VoiceControl onCommand={handleVoiceCommand} />
       <div className="container mx-auto max-w-5xl">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold mb-4">Scan Medicine</h1>
@@ -223,7 +276,14 @@ const Scan = () => {
           )}
         </Card>
 
-        {result && <ResultCard result={result} />}
+        {result && (
+          <>
+            <ResultCard result={result} />
+            {showSupplyChain && result.batchNumber !== "N/A" && (
+              <SupplyChainMap batchNumber={result.batchNumber} />
+            )}
+          </>
+        )}
       </div>
     </div>
   );
