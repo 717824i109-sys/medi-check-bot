@@ -24,51 +24,50 @@ export interface BlockchainVerification {
 }
 
 export async function verifyBatchOnBlockchain(
-  batchNumber: string
+  batchNumber: string,
+  medicineName?: string
 ): Promise<BlockchainVerification> {
   try {
-    // Check if MetaMask is installed
-    if (typeof window.ethereum === 'undefined') {
-      console.warn('MetaMask not installed, skipping blockchain verification');
+    // Use real database verification via edge function
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+    
+    if (!supabaseUrl || !supabaseKey) {
+      console.error('Supabase configuration missing');
       return { isVerified: false };
     }
 
-    // Connect to Sepolia testnet
-    const provider = new ethers.BrowserProvider(window.ethereum);
+    const response = await fetch(`${supabaseUrl}/functions/v1/verify-batch`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseKey}`,
+      },
+      body: JSON.stringify({ 
+        batchNumber,
+        medicineName 
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('Verification API error:', response.status);
+      return { isVerified: false };
+    }
+
+    const data = await response.json();
     
-    // Create contract instance
-    const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
-
-    // Verify batch on-chain
-    const [isVerified, timestamp, manufacturer] = await contract.verifyBatch(batchNumber);
-
     return {
-      isVerified,
-      timestamp: timestamp ? Number(timestamp) : undefined,
-      manufacturer: manufacturer || undefined,
+      isVerified: data.isVerified,
+      timestamp: data.timestamp,
+      manufacturer: data.manufacturer,
+      transactionHash: data.source || 'Database Verified',
     };
   } catch (error) {
-    console.error('Blockchain verification error:', error);
-    // Fallback: simulate verification for demo purposes
-    return simulateBlockchainVerification(batchNumber);
+    console.error('Batch verification error:', error);
+    return { isVerified: false };
   }
 }
 
-// Simulated blockchain verification for demo (when MetaMask not available)
-function simulateBlockchainVerification(batchNumber: string): BlockchainVerification {
-  // Simulate some batches as verified
-  const verifiedBatches = ['LOT12345', 'BATCH-2024-001', 'MFG123456'];
-  
-  const isVerified = verifiedBatches.some(batch => 
-    batchNumber.toUpperCase().includes(batch)
-  );
-
-  return {
-    isVerified,
-    timestamp: isVerified ? Date.now() - 86400000 : undefined, // 1 day ago
-    manufacturer: isVerified ? 'Verified Manufacturer' : undefined,
-  };
-}
 
 export async function connectWallet(): Promise<string | null> {
   try {

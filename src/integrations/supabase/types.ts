@@ -62,6 +62,51 @@ export type Database = {
         }
         Relationships: []
       }
+      verified_medicines: {
+        Row: {
+          batch_number: string
+          created_at: string
+          expiry_date: string | null
+          id: string
+          is_genuine: boolean
+          manufacture_date: string | null
+          manufacturer: string
+          medicine_name: string
+          metadata: Json | null
+          updated_at: string
+          verification_source: string
+          verification_timestamp: string
+        }
+        Insert: {
+          batch_number: string
+          created_at?: string
+          expiry_date?: string | null
+          id?: string
+          is_genuine?: boolean
+          manufacture_date?: string | null
+          manufacturer: string
+          medicine_name: string
+          metadata?: Json | null
+          updated_at?: string
+          verification_source: string
+          verification_timestamp?: string
+        }
+        Update: {
+          batch_number?: string
+          created_at?: string
+          expiry_date?: string | null
+          id?: string
+          is_genuine?: boolean
+          manufacture_date?: string | null
+          manufacturer?: string
+          medicine_name?: string
+          metadata?: Json | null
+          updated_at?: string
+          verification_source?: string
+          verification_timestamp?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

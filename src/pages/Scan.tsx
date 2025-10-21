@@ -59,8 +59,11 @@ const Scan = () => {
       // Call AI model for analysis (now includes OpenFDA integration)
       const analysisResult = await analyzeMedicineImage(imageData);
       
-      // Perform blockchain verification
-      const blockchainVerification = await verifyBatchOnBlockchain(analysisResult.batchNumber);
+      // Perform blockchain verification with medicine name for auto-verification
+      const blockchainVerification = await verifyBatchOnBlockchain(
+        analysisResult.batchNumber,
+        analysisResult.medicineName
+      );
       
       // Fetch additional info from database based on status
       let enrichedResult = { 
@@ -135,27 +138,78 @@ const Scan = () => {
     analyzeWithModel(imageUrl);
   };
 
-  const handleQRScan = (data: string) => {
+  const handleQRScan = async (data: string) => {
     console.log("QR scanned:", data);
+    setIsAnalyzing(true);
     
     try {
-      // Try to parse QR data as JSON (medicine info)
-      const qrData = JSON.parse(data);
-      if (qrData.medicine_name || qrData.name) {
-        toast.success("Medicine QR code detected!");
+      // Send QR data to intelligent processing edge function
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-qr-data`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ qrData: data }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to process QR code');
+      }
+
+      const processedData = await response.json();
+      console.log('Processed QR data:', processedData);
+
+      // Handle image URLs - download and analyze
+      if (processedData.type === 'image_url') {
+        toast.success("QR image link detected!");
+        handleImageUpload(processedData.imageUrl);
+        return;
+      }
+
+      // Handle data URLs (base64 images)
+      if (data.startsWith("data:image")) {
+        toast.success("QR image detected!");
+        setUploadedImage(data);
+        analyzeWithModel(data);
+        return;
+      }
+
+      // Handle extracted medicine info from any format
+      if (processedData.extracted && (processedData.extracted.batchNumber || processedData.extracted.medicineName)) {
+        const { batchNumber, medicineName, manufacturer, expiryDate } = processedData.extracted;
         
-        // QR contains medicine data directly
+        toast.success("Medicine data extracted from QR code!");
+        
+        // Verify the batch using intelligent verification
+        const blockchain = await verifyBatchOnBlockchain(
+          batchNumber || 'UNKNOWN',
+          medicineName
+        );
+
         const result: ScanResult = {
-          status: "genuine",
-          confidence: qrData.confidence || 95,
-          medicineName: qrData.medicine_name || qrData.name || "Unknown",
-          batchNumber: qrData.batch_number || qrData.batch || "N/A",
-          expiryDate: qrData.expiry_date || qrData.expiry || "N/A",
-          manufacturer: qrData.manufacturer || "N/A",
-          details: "Medicine verified via QR code",
-          purpose: qrData.purpose,
+          status: blockchain.isVerified ? "genuine" : "suspicious",
+          confidence: blockchain.isVerified ? 92 : 45,
+          medicineName: medicineName || "Extracted from QR",
+          batchNumber: batchNumber || "N/A",
+          expiryDate: expiryDate || "N/A",
+          manufacturer: manufacturer || blockchain.manufacturer || "Unknown",
+          details: blockchain.isVerified 
+            ? "Medicine verified via database check" 
+            : "Batch not found in verified medicine database",
+          purpose: "Upload image for detailed analysis",
+          blockchain,
         };
+
         setResult(result);
+        setShowSupplyChain(blockchain.isVerified);
+        
+        // Voice feedback
+        if (blockchain.isVerified) {
+          voiceAssistant.speak(`This medicine ${medicineName || ''} is verified as genuine.`);
+        } else {
+          voiceAssistant.speak(`Warning: This batch could not be verified in our database.`);
+        }
         
         // Save to history
         const history = JSON.parse(localStorage.getItem("scanHistory") || "[]");
@@ -165,25 +219,22 @@ const Scan = () => {
           id: Date.now().toString()
         });
         localStorage.setItem("scanHistory", JSON.stringify(history.slice(0, 20)));
-        return;
+      } else {
+        // QR contains data but couldn't extract medicine info
+        toast.info("QR Code Processed", {
+          description: "No medicine information found. Try uploading the medicine package image for better analysis.",
+          duration: 6000,
+        });
       }
-    } catch (e) {
-      // Not JSON, continue with other checks
+    } catch (error) {
+      console.error('QR scan error:', error);
+      toast.error("QR Processing Error", {
+        duration: 6000,
+        description: "Could not process this QR code. Try the Upload Image tab instead."
+      });
+    } finally {
+      setIsAnalyzing(false);
     }
-    
-    // Check if it's a base64 image
-    if (data.startsWith("data:image")) {
-      toast.success("QR image detected!");
-      setUploadedImage(data);
-      analyzeWithModel(data);
-      return;
-    }
-    
-    // For URL-based QR codes, show helpful message
-    toast.error("QR Scanner Not Supported for This Code", {
-      duration: 6000,
-      description: "Please use the Upload Image tab to take a photo of the medicine package instead"
-    });
   };
 
   const handleVoiceCommand = (command: string) => {
