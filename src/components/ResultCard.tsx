@@ -96,6 +96,21 @@ const ResultCard = ({ result }: ResultCardProps) => {
 
   return (
     <Card className={`overflow-hidden border-2 ${config.border} animate-fade-in`}>
+      {/* Expiry Warning Banner - Critical Priority */}
+      {result.isExpired && (
+        <div className="bg-destructive text-destructive-foreground p-4 border-b-4 border-destructive">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="h-8 w-8 animate-pulse" />
+            <div className="flex-1">
+              <h3 className="text-xl font-bold">⚠️ EXPIRED MEDICINE - DO NOT CONSUME</h3>
+              <p className="text-sm mt-1">
+                This medicine expired on <strong>{result.expiryDate}</strong>. Consuming expired medication can be dangerous to your health.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className={`p-6 ${config.bg}`}>
         <div className="flex items-center gap-4 mb-4">
           <div className={`p-3 rounded-full bg-card`}>

@@ -14,28 +14,36 @@ function extractMedicineInfo(text: string) {
     expiryDate: null,
   };
 
-  // Common patterns for batch numbers
+  // Enhanced batch number patterns
   const batchPatterns = [
-    /batch[:\s]*([A-Z0-9\-]+)/i,
-    /lot[:\s]*([A-Z0-9\-]+)/i,
-    /mfg[:\s]*([A-Z0-9\-]+)/i,
-    /batch\s*no[.:\s]*([A-Z0-9\-]+)/i,
-    /lot\s*no[.:\s]*([A-Z0-9\-]+)/i,
+    /batch[:\s#]+([A-Z0-9\-\/]+)/i,
+    /lot[:\s#]+([A-Z0-9\-\/]+)/i,
+    /mfg[:\s#]+([A-Z0-9\-\/]+)/i,
+    /batch\s*no[.:\s#]*([A-Z0-9\-\/]+)/i,
+    /lot\s*no[.:\s#]*([A-Z0-9\-\/]+)/i,
+    /\bLOT([A-Z0-9]+)/i,
+    /\bBATCH([A-Z0-9]+)/i,
+    /batch[_-]?id[=:]([A-Z0-9\-\/]+)/i,
+    /lot[_-]?no[=:]([A-Z0-9\-\/]+)/i,
+    /b[#]([A-Z0-9]+)/i,
   ];
 
   for (const pattern of batchPatterns) {
     const match = text.match(pattern);
     if (match) {
-      info.batchNumber = match[1].toUpperCase();
+      info.batchNumber = match[1].trim().toUpperCase();
       break;
     }
   }
 
-  // Expiry date patterns
+  // Enhanced expiry date patterns (MM/YYYY and other formats)
   const expiryPatterns = [
-    /exp[iry]*[:\s]*(\d{2}[-/]\d{2}[-/]\d{2,4})/i,
-    /valid\s*until[:\s]*(\d{2}[-/]\d{2}[-/]\d{2,4})/i,
-    /use\s*before[:\s]*(\d{2}[-/]\d{2}[-/]\d{2,4})/i,
+    /exp[iry]*[:\s]*(\d{1,2}[\/\-]\d{2,4})/i,
+    /valid\s*until[:\s]*(\d{1,2}[\/\-]\d{2,4})/i,
+    /use\s*before[:\s]*(\d{1,2}[\/\-]\d{2,4})/i,
+    /valid\s*till[:\s]*(\d{1,2}[\/\-]\d{2,4})/i,
+    /exp[_-]?date[=:](\d{1,2}[\/\-]\d{2,4})/i,
+    /expiry[_-]?date[=:](\d{1,2}[\/\-]\d{2,4})/i,
   ];
 
   for (const pattern of expiryPatterns) {
@@ -46,10 +54,37 @@ function extractMedicineInfo(text: string) {
     }
   }
 
-  // Try to extract medicine name (usually first capitalized words)
-  const nameMatch = text.match(/^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/);
-  if (nameMatch) {
-    info.medicineName = nameMatch[1];
+  // Enhanced manufacturer patterns
+  const mfgPatterns = [
+    /mfg\s*by[:\s]+([A-Za-z\s&.,()]+?)(?:\||batch|exp|lot|$)/i,
+    /manufactured\s*by[:\s]+([A-Za-z\s&.,()]+?)(?:\||batch|exp|lot|$)/i,
+    /manufacturer[:\s]+([A-Za-z\s&.,()]+?)(?:\||batch|exp|lot|$)/i,
+    /mfr[=:]([A-Za-z\s&.,()]+?)(?:&|batch|exp|lot|$)/i,
+  ];
+
+  for (const pattern of mfgPatterns) {
+    const match = text.match(pattern);
+    if (match) {
+      info.manufacturer = match[1].trim();
+      break;
+    }
+  }
+
+  // Enhanced medicine name patterns
+  const namePatterns = [
+    /medicine[:\s]+([A-Za-z\s®™©0-9]+?)(?:\||batch|exp|lot|$)/i,
+    /product[:\s]+([A-Za-z\s®™©0-9]+?)(?:\||batch|exp|lot|$)/i,
+    /drug[:\s]+([A-Za-z\s®™©0-9]+?)(?:\||batch|exp|lot|$)/i,
+    /name[=:]([A-Za-z\s®™©0-9]+?)(?:&|batch|exp|lot|$)/i,
+    /^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/, // Capitalized words at start
+  ];
+
+  for (const pattern of namePatterns) {
+    const match = text.match(pattern);
+    if (match) {
+      info.medicineName = match[1].trim();
+      break;
+    }
   }
 
   return info;
@@ -116,14 +151,26 @@ serve(async (req) => {
         processedData.imageUrl = qrData;
         processedData.extracted.shouldAnalyzeImage = true;
       } else {
+        // First, try to extract from URL itself (for shortened URLs with params)
+        const urlExtracted = extractMedicineInfo(decodeURIComponent(qrData));
+        
         // Fetch website content and try to extract medicine info
         const content = await fetchUrlContent(qrData);
         if (content) {
           const extracted = extractMedicineInfo(content);
           processedData.extracted = {
-            ...extracted,
-            foundInWebsite: true,
+            ...urlExtracted, // Start with URL extraction
+            ...extracted, // Override with website content if found
+            foundInWebsite: !!content,
             websiteUrl: qrData
+          };
+        } else {
+          // Use URL extraction even if fetch failed
+          processedData.extracted = {
+            ...urlExtracted,
+            foundInWebsite: false,
+            websiteUrl: qrData,
+            note: 'Extracted from URL pattern (website not accessible)'
           };
         }
       }

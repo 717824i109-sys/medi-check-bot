@@ -26,6 +26,7 @@ export type ScanResult = {
   description?: string;
   sideEffects?: string;
   reason?: string;
+  isExpired?: boolean;
   // FDA verified information
   fdaInfo?: {
     genericName: string;
@@ -42,6 +43,47 @@ export type ScanResult = {
     timestamp?: number;
     manufacturer?: string;
   };
+};
+
+// Helper function to check if medicine is expired
+const checkIfExpired = (expiryDate: string): boolean => {
+  if (!expiryDate || expiryDate === "N/A") return false;
+  
+  try {
+    // Parse various date formats (MM/YYYY, MM-YYYY, YYYY-MM, etc.)
+    const datePatterns = [
+      /(\d{1,2})[\/\-](\d{4})/, // MM/YYYY or MM-YYYY
+      /(\d{4})[\/\-](\d{1,2})/, // YYYY/MM or YYYY-MM
+    ];
+    
+    for (const pattern of datePatterns) {
+      const match = expiryDate.match(pattern);
+      if (match) {
+        let month: number, year: number;
+        
+        if (match[2].length === 4) {
+          // MM/YYYY format
+          month = parseInt(match[1]);
+          year = parseInt(match[2]);
+        } else {
+          // YYYY/MM format
+          year = parseInt(match[1]);
+          month = parseInt(match[2]);
+        }
+        
+        // Create date at end of expiry month
+        const expiry = new Date(year, month, 0); // Last day of the month
+        const now = new Date();
+        
+        return expiry < now;
+      }
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Error parsing expiry date:', error);
+    return false;
+  }
 };
 
 const Scan = () => {
@@ -65,10 +107,17 @@ const Scan = () => {
         analysisResult.medicineName
       );
       
+      // Check expiry date
+      const isExpired = checkIfExpired(analysisResult.expiryDate);
+      
       // Fetch additional info from database based on status
       let enrichedResult = { 
         ...analysisResult,
-        blockchain: blockchainVerification
+        blockchain: blockchainVerification,
+        isExpired,
+        status: isExpired && analysisResult.status === "genuine" 
+          ? "suspicious" 
+          : analysisResult.status
       };
       
       if (analysisResult.status === "genuine") {
@@ -105,8 +154,10 @@ const Scan = () => {
       setShowSupplyChain(enrichedResult.status === "genuine");
       
       // Read result aloud with voice assistant
+      const expiryWarning = enrichedResult.isExpired ? 'Warning: This medicine has expired and should not be consumed.' : '';
       const resultMessage = `Medicine analysis complete. This is ${enrichedResult.medicineName}. 
         Status: ${enrichedResult.status}. Confidence: ${enrichedResult.confidence} percent. 
+        ${expiryWarning}
         ${enrichedResult.fdaInfo ? `Purpose: ${enrichedResult.fdaInfo.purpose.substring(0, 100)}` : ''}`;
       
       voiceAssistant.speak(resultMessage);
@@ -187,25 +238,34 @@ const Scan = () => {
           medicineName
         );
 
+        const isExpired = checkIfExpired(expiryDate || "N/A");
+        
         const result: ScanResult = {
-          status: blockchain.isVerified ? "genuine" : "suspicious",
-          confidence: blockchain.isVerified ? 92 : 45,
+          status: isExpired 
+            ? "suspicious" 
+            : blockchain.isVerified ? "genuine" : "suspicious",
+          confidence: blockchain.isVerified && !isExpired ? 92 : 45,
           medicineName: medicineName || "Extracted from QR",
           batchNumber: batchNumber || "N/A",
           expiryDate: expiryDate || "N/A",
           manufacturer: manufacturer || blockchain.manufacturer || "Unknown",
-          details: blockchain.isVerified 
-            ? "Medicine verified via database check" 
-            : "Batch not found in verified medicine database",
+          details: isExpired
+            ? "WARNING: This medicine has EXPIRED and should not be consumed!"
+            : blockchain.isVerified 
+              ? "Medicine verified via database check" 
+              : "Batch not found in verified medicine database",
           purpose: "Upload image for detailed analysis",
           blockchain,
+          isExpired,
         };
 
         setResult(result);
         setShowSupplyChain(blockchain.isVerified);
         
         // Voice feedback
-        if (blockchain.isVerified) {
+        if (isExpired) {
+          voiceAssistant.speak(`Critical Warning: This medicine ${medicineName || ''} has expired. Do not consume it.`);
+        } else if (blockchain.isVerified) {
           voiceAssistant.speak(`This medicine ${medicineName || ''} is verified as genuine.`);
         } else {
           voiceAssistant.speak(`Warning: This batch could not be verified in our database.`);
