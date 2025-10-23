@@ -28,59 +28,173 @@ async function autoVerifyFromOpenFDA(medicineName: string, batchNumber: string) 
     }
     
     if (!response.ok) {
-      console.log('OpenFDA: No results found, auto-verifying as genuine');
-      // Auto-verify any medicine with valid format as genuine
-      return {
-        manufacturer: 'Verified Manufacturer',
-        generic_name: medicineName,
-        brand_name: medicineName,
-        source: 'Auto-Verified',
-        metadata: { note: 'Auto-verified based on batch format' }
-      };
+      console.log('OpenFDA: No results found');
+      return null;
     }
     
     const data = await response.json();
     if (!data.results || data.results.length === 0) {
-      // Auto-verify if no FDA data but valid batch
-      return {
-        manufacturer: 'Verified Manufacturer',
-        generic_name: medicineName,
-        brand_name: medicineName,
-        source: 'Auto-Verified',
-        metadata: { note: 'Auto-verified based on batch format' }
-      };
+      return null;
     }
     
     const result = data.results[0];
+    console.log('OpenFDA: Medicine found -', result.openfda?.brand_name?.[0] || medicineName);
     return {
-      manufacturer: result.openfda?.manufacturer_name?.[0] || 'Verified Manufacturer',
+      manufacturer: result.openfda?.manufacturer_name?.[0] || 'FDA Verified Manufacturer',
       generic_name: result.openfda?.generic_name?.[0] || medicineName,
       brand_name: result.openfda?.brand_name?.[0] || medicineName,
-      source: 'OpenFDA',
+      source: 'OpenFDA (US FDA)',
       metadata: result.openfda
     };
   } catch (error) {
-    console.error('OpenFDA auto-verify error:', error);
-    // Even on error, auto-verify valid batches
-    return {
-      manufacturer: 'Verified Manufacturer',
-      generic_name: medicineName,
-      brand_name: medicineName,
-      source: 'Auto-Verified',
-      metadata: { note: 'Auto-verified on API error' }
-    };
+    console.error('OpenFDA verification error:', error);
+    return null;
   }
 }
 
-// Fetch from WHO database (simplified example)
-async function autoVerifyFromWHO(medicineName: string) {
-  // WHO doesn't have a public API for batch verification
-  // This is a placeholder for future integration
-  // You could integrate with other databases like:
-  // - National drug registries
-  // - CDSCO India
-  // - EMA Europe
-  // - etc.
+// Fetch from RxNorm (NLM - National Library of Medicine)
+async function verifyFromRxNorm(medicineName: string) {
+  try {
+    // RxNorm API for drug name verification
+    const searchUrl = `https://rxnav.nlm.nih.gov/REST/drugs.json?name=${encodeURIComponent(medicineName)}`;
+    const response = await fetch(searchUrl);
+    
+    if (!response.ok) return null;
+    
+    const data = await response.json();
+    if (data.drugGroup?.conceptGroup) {
+      for (const group of data.drugGroup.conceptGroup) {
+        if (group.conceptProperties && group.conceptProperties.length > 0) {
+          const drug = group.conceptProperties[0];
+          console.log('RxNorm: Medicine found -', drug.name);
+          return {
+            manufacturer: 'RxNorm Verified',
+            generic_name: drug.name,
+            brand_name: medicineName,
+            source: 'RxNorm (NLM)',
+            metadata: { rxcui: drug.rxcui, tty: drug.tty }
+          };
+        }
+      }
+    }
+    return null;
+  } catch (error) {
+    console.error('RxNorm verification error:', error);
+    return null;
+  }
+}
+
+// Fetch from DailyMed (NLM - Drug Labels Database)
+async function verifyFromDailyMed(medicineName: string) {
+  try {
+    const searchUrl = `https://dailymed.nlm.nih.gov/dailymed/services/v2/spls.json?drug_name=${encodeURIComponent(medicineName)}`;
+    const response = await fetch(searchUrl);
+    
+    if (!response.ok) return null;
+    
+    const data = await response.json();
+    if (data.data && data.data.length > 0) {
+      const drug = data.data[0];
+      console.log('DailyMed: Medicine found -', drug.title);
+      return {
+        manufacturer: drug.author || 'DailyMed Verified',
+        generic_name: drug.title,
+        brand_name: medicineName,
+        source: 'DailyMed (NLM)',
+        metadata: { setid: drug.setid, published_date: drug.published_date }
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error('DailyMed verification error:', error);
+    return null;
+  }
+}
+
+// Fetch from NIH Drug Information Portal
+async function verifyFromNIH(medicineName: string) {
+  try {
+    // NIH PubChem API for drug verification
+    const searchUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encodeURIComponent(medicineName)}/description/JSON`;
+    const response = await fetch(searchUrl);
+    
+    if (!response.ok) return null;
+    
+    const data = await response.json();
+    if (data.InformationList?.Information && data.InformationList.Information.length > 0) {
+      const info = data.InformationList.Information[0];
+      console.log('NIH PubChem: Medicine found -', info.Title);
+      return {
+        manufacturer: 'NIH Verified',
+        generic_name: info.Title,
+        brand_name: medicineName,
+        source: 'NIH PubChem',
+        metadata: { cid: info.CID, description: info.Description?.substring(0, 200) }
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error('NIH verification error:', error);
+    return null;
+  }
+}
+
+// Fetch from European Medicines Agency (EMA)
+async function verifyFromEMA(medicineName: string) {
+  try {
+    // EMA API for European drug database
+    const searchUrl = `https://api.ema.europa.eu/medicines/search?query=${encodeURIComponent(medicineName)}`;
+    const response = await fetch(searchUrl);
+    
+    if (!response.ok) return null;
+    
+    const data = await response.json();
+    if (data.results && data.results.length > 0) {
+      const medicine = data.results[0];
+      console.log('EMA: Medicine found -', medicine.name);
+      return {
+        manufacturer: medicine.marketingAuthorisationHolder || 'EMA Verified',
+        generic_name: medicine.activeSubstance || medicineName,
+        brand_name: medicine.name || medicineName,
+        source: 'EMA (European Medicines Agency)',
+        metadata: { authorization_number: medicine.authorizationNumber, status: medicine.status }
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error('EMA verification error:', error);
+    return null;
+  }
+}
+
+// Multi-database verification strategy
+async function verifyFromMultipleSources(medicineName: string, batchNumber: string) {
+  console.log('Starting multi-source verification for:', medicineName);
+  
+  // Check all databases in parallel for faster response
+  const [fdaData, rxNormData, dailyMedData, nihData, emaData] = await Promise.all([
+    autoVerifyFromOpenFDA(medicineName, batchNumber),
+    verifyFromRxNorm(medicineName),
+    verifyFromDailyMed(medicineName),
+    verifyFromNIH(medicineName),
+    verifyFromEMA(medicineName)
+  ]);
+  
+  // Prioritize FDA data if available
+  if (fdaData && fdaData.source === 'OpenFDA') {
+    return fdaData;
+  }
+  
+  // Then try other authoritative sources
+  if (dailyMedData) return dailyMedData;
+  if (rxNormData) return rxNormData;
+  if (nihData) return nihData;
+  if (emaData) return emaData;
+  
+  // If found in any source, return it
+  if (fdaData) return fdaData;
+  
+  // If not found in any database, return null
   return null;
 }
 
@@ -131,50 +245,56 @@ serve(async (req) => {
       );
     }
 
-    // If not found and medicine name provided, try to auto-verify from external sources
+    // If not found and medicine name provided, try to auto-verify from multiple databases
     if (medicineName) {
-      console.log('Auto-verifying from external sources:', medicineName);
+      console.log('Verifying from multiple authenticated databases:', medicineName);
       
-      // Try OpenFDA first
-      const fdaData = await autoVerifyFromOpenFDA(medicineName, batchNumber);
+      // Check all major medicine databases
+      const verificationData = await verifyFromMultipleSources(medicineName, batchNumber);
       
-      if (fdaData) {
+      if (verificationData) {
         // Auto-add to our database
         const { data: newBatch, error: insertError } = await supabase
           .from('verified_medicines')
           .insert({
             batch_number: batchNumber,
             medicine_name: medicineName,
-            manufacturer: fdaData.manufacturer,
-            verification_source: 'OpenFDA',
+            manufacturer: verificationData.manufacturer,
+            verification_source: verificationData.source,
             is_genuine: true,
-            metadata: fdaData.metadata
+            metadata: verificationData.metadata
           })
           .select()
           .single();
 
         if (insertError) {
           console.error('Auto-insert error:', insertError);
+          // Return verified data even if insert fails
+          return new Response(
+            JSON.stringify({
+              isVerified: true,
+              timestamp: Date.now(),
+              manufacturer: verificationData.manufacturer,
+              medicineName: verificationData.generic_name,
+              source: verificationData.source,
+              metadata: verificationData.metadata
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
         } else {
-          console.log('Auto-verified and added to database:', batchNumber);
+          console.log('✅ Verified and added to database from', verificationData.source);
           return new Response(
             JSON.stringify({
               isVerified: true,
               timestamp: new Date(newBatch.verification_timestamp).getTime(),
               manufacturer: newBatch.manufacturer,
               medicineName: newBatch.medicine_name,
-              source: 'OpenFDA (Auto-verified)',
-              metadata: fdaData.metadata
+              source: `${newBatch.verification_source} (Authenticated)`,
+              metadata: verificationData.metadata
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
-      }
-
-      // Try WHO or other sources
-      const whoData = await autoVerifyFromWHO(medicineName);
-      if (whoData) {
-        // Similar auto-add logic
       }
     }
 
