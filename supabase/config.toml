@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.process-qr-data]
 verify_jwt = false
+
+[functions.pharmacy-api]
+verify_jwt = false

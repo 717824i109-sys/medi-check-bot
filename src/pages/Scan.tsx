@@ -4,6 +4,8 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Upload, Camera, QrCode, Loader2, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import QRScanner from "@/components/QRScanner";
 import UploadArea from "@/components/UploadArea";
 import ResultCard from "@/components/ResultCard";
@@ -92,6 +94,52 @@ const Scan = () => {
   const [result, setResult] = useState<ScanResult | null>(null);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [showSupplyChain, setShowSupplyChain] = useState(false);
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const saveScanToDatabase = async (scanResult: ScanResult, method: 'qr' | 'image' | 'voice') => {
+    if (!user) {
+      // Save to localStorage for non-authenticated users
+      const history = JSON.parse(localStorage.getItem("scanHistory") || "[]");
+      history.unshift({
+        ...scanResult,
+        timestamp: new Date().toISOString(),
+        id: Date.now().toString()
+      });
+      localStorage.setItem("scanHistory", JSON.stringify(history.slice(0, 20)));
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from('scan_history').insert({
+        user_id: user.id,
+        medicine_name: scanResult.medicineName,
+        batch_number: scanResult.batchNumber,
+        manufacturer: scanResult.manufacturer,
+        status: scanResult.status,
+        confidence: scanResult.confidence,
+        scan_method: method,
+        is_expired: scanResult.isExpired || false,
+        expiry_date: scanResult.expiryDate !== 'N/A' ? scanResult.expiryDate : null,
+        blockchain_verified: scanResult.blockchain?.isVerified || false,
+        metadata: {
+          fdaInfo: scanResult.fdaInfo,
+          purpose: scanResult.purpose,
+          description: scanResult.description,
+          sideEffects: scanResult.sideEffects,
+          reason: scanResult.reason,
+          details: scanResult.details
+        }
+      });
+
+      if (error) {
+        console.error('Error saving scan:', error);
+        toast.error('Failed to save scan to your history');
+      }
+    } catch (error) {
+      console.error('Error saving scan:', error);
+    }
+  };
 
   const analyzeWithModel = async (imageData: string) => {
     setIsAnalyzing(true);
@@ -162,14 +210,8 @@ const Scan = () => {
       
       voiceAssistant.speak(resultMessage);
       
-      // Save to history
-      const history = JSON.parse(localStorage.getItem("scanHistory") || "[]");
-      history.unshift({
-        ...enrichedResult,
-        timestamp: new Date().toISOString(),
-        id: Date.now().toString()
-      });
-      localStorage.setItem("scanHistory", JSON.stringify(history.slice(0, 20)));
+      // Save to database or localStorage
+      await saveScanToDatabase(enrichedResult, 'image');
 
       toast.success("Analysis complete!");
     } catch (error) {
